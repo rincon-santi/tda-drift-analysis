@@ -1,0 +1,10 @@
+alibi-detect
+alibi-detect[tensorflow]
+scikit-tda
+seaborn
+xgboost
+torch
+nltk
+gensim
+google-cloud-storage
+psutil
