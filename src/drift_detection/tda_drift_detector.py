@@ -3,7 +3,13 @@ import persim
 import numpy as np
 import json
 import os
+import psutil
 from .drift_detector import DriftDetector
+import logging
+
+R_COVER_TRESHOLD = 0.3
+MEMORY_USAGE_RATIO = 0.4
+
 
 
 
@@ -23,13 +29,13 @@ class TDADriftDetector(DriftDetector):
     @staticmethod
     def _get_wasserstein_distance(no_drift, drift_unknown, comparison_name="drifted data", detector_name="Bert"):
         wasserstein_distance = persim.wasserstein(no_drift, drift_unknown)
-        print(f"Wasserstein distance using {detector_name} of no drift and {comparison_name}: {wasserstein_distance}")
+        logging.warning(f"Wasserstein distance using {detector_name} of no drift and {comparison_name}: {wasserstein_distance}")
         return wasserstein_distance
 
     @staticmethod
     def get_bottleneck_distance(no_drift, drift_unknown, comparison_name="drifted data", detector_name="Bert"):
         bottleneck_distance = persim.bottleneck(no_drift, drift_unknown)
-        print(f"Bottleneck distance using {detector_name} of no drift and {comparison_name}: {bottleneck_distance}")
+        logging.warning(f"Bottleneck distance using {detector_name} of no drift and {comparison_name}: {bottleneck_distance}")
         return bottleneck_distance
 
     @staticmethod
@@ -39,13 +45,42 @@ class TDADriftDetector(DriftDetector):
         no_drift_slices = np.array_split(data_copy, 100)
         distances = [func(no_drift_slices[i], no_drift_slices[j]) for i in range(len(no_drift_slices)) for j in range(i)]
         threshold = np.quantile(distances, 1 - tolerance_alpha)
-        print(f"Threshold for {detector_name} in distance {operation_name}: {threshold}")
+        logging.warning(f"Threshold for {detector_name} in distance {operation_name}: {threshold}")
         return threshold
+    
+    @staticmethod
+    def _compute_nperm_based_on_available_memory():
+        available_memory = psutil.virtual_memory().available
+        usable_memory = available_memory * MEMORY_USAGE_RATIO
+        float_size = 4
+        n_perm = int((usable_memory / float_size) ** 0.5)
+        logging.warning(f"Usable memory: {usable_memory} bytes, setting n_perm to {n_perm}")
+        return n_perm
+    
+    @staticmethod
+    def _compute_ripster_diagram(data):
+        for attempt in range(5):
+            try:
+                n_perm = TDADriftDetector._compute_nperm_based_on_available_memory()
+                n_perm = min(n_perm, data.shape[0])
+                ripser_output = ripser.ripser(
+                    data, metric="euclidean", maxdim=1, n_perm=n_perm)
+                diagram = ripser_output['dgms'][1]
+                r_cover = ripser_output['r_cover']
+                if r_cover > R_COVER_TRESHOLD:
+                    logging.warning(f"R cover is {r_cover}, trying again")
+                    raise Exception("R cover too high")
+                logging.warning(f"R cover is {r_cover}. Diagram computed successfully")
+                return diagram
+            except Exception as e:
+                logging.error(f"Error during diagram computation: {e}")
+                logging.warning(f"Attempt {attempt + 1}")
+        raise Exception("Failed to compute diagram")
+    
 
     def _fit(self, data_without_drift):
         self.data_without_drift = data_without_drift.copy()
-        self.diagram_without_drift = ripser.ripser(
-            self.data_without_drift, metric="euclidean", maxdim=1)['dgms'][1]
+        self.diagram_without_drift = TDADriftDetector._compute_ripster_diagram(self.data_without_drift)
         self.wasserstein_distance_threshold = TDADriftDetector.compute_distance_threshold(
             self.diagram_without_drift, persim.wasserstein, self.alfa_threshold, self.name, "Wasserstein")
         self.bottleneck_distance_threshold = TDADriftDetector.compute_distance_threshold(
@@ -53,8 +88,7 @@ class TDADriftDetector(DriftDetector):
         return self
     
     def _predict(self, data_with_drift, data_name="drifted data", allow_wasserstein=True, allow_bottleneck=True):
-        data_with_drift_diagram = ripser.ripser(
-            data_with_drift, metric="euclidean", maxdim=1)['dgms'][1]
+        data_with_drift_diagram = TDADriftDetector._compute_ripster_diagram(data_with_drift)
         self.drifted_diagrams.append((data_name, data_with_drift_diagram))
         if allow_wasserstein:
             wasserstein_distance = TDADriftDetector._get_wasserstein_distance(

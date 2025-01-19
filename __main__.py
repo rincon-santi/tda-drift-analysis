@@ -8,7 +8,8 @@ from json import JSONEncoder
 import time
 import sys
 import numpy as np
-#from google.cloud import storage
+import logging
+from google.cloud import storage
 sys.path.append(os.path.dirname(__file__))
 from src.data_loading import BertEmbeddingsGenerator, W2VEmbeddingsGenerator, load_data
 from src.drift_detection import TDADriftDetector, TraditionalDriftDetector
@@ -32,19 +33,20 @@ class MyEncoder(JSONEncoder):
             return bool(o)
         return o
 
-#def upload_to_gcs(local_folder, bucket_name, destination_folder):
-#    client = storage.Client()
-#    bucket = client.bucket(bucket_name)
-#    
-#    for root, _, files in os.walk(local_folder):
-#        for file in files:
-#            local_path = os.path.join(root, file)
-#            relative_path = os.path.relpath(local_path, local_folder)
-#            blob_path = os.path.join(destination_folder, relative_path)
-#            blob = bucket.blob(blob_path)
-#            blob.upload_from_filename(local_path)
-#            print(f"Uploaded {local_path} to {blob_path}")
-#
+def upload_to_gcs(local_folder, bucket_name, destination_folder):
+    client = storage.Client()
+    bucket = client.bucket(bucket_name)
+    logging.warning(f"Uploading {local_folder} to {destination_folder}, bucket {bucket_name}")
+    
+    for root, _, files in os.walk(local_folder):
+        for file in files:
+            local_path = os.path.join(root, file)
+            relative_path = os.path.relpath(local_path, local_folder)
+            blob_path = os.path.join(destination_folder, relative_path)
+            blob = bucket.blob(blob_path)
+            blob.upload_from_filename(local_path)
+            logging.warning(f"Uploaded {local_path} to {blob_path}")
+
 def download_and_load_data():
     if not os.path.exists("resources/sentiment_data/training.1600000.processed.noemoticon.csv"):
         # Download the file
@@ -72,15 +74,15 @@ def setup_model_and_detectors(data):
     detectors = {}
     models = {}
     for embedding_generator in embedding_generators:
-        print(f"Generating embeddings with {embedding_generator.name}")
-        print(f"Data shape: {data.shape}")
+        logging.warning(f"Generating embeddings with {embedding_generator.name}")
+        logging.warning(f"Data shape: {data.shape}")
         embedding_resources = embedding_generator.generate_embeddings(data)
-        print(f"Embeddings shape: {embedding_generator.get_embeddings()['embeddings'].shape}")
+        logging.warning(f"Embeddings shape: {embedding_generator.get_embeddings()['embeddings'].shape}")
         setup_report[embedding_generator.name] = {"embedding_resources": embedding_resources}
         detectors[embedding_generator.name] = []
         for drift_detector in drift_detectors:
             instantiated_drift_detector = drift_detector()
-            print(f"Fitting {instantiated_drift_detector.name} with {embedding_generator.name}")
+            logging.warning(f"Fitting {instantiated_drift_detector.name} with {embedding_generator.name}")
             detector, fit_resources = instantiated_drift_detector.fit(embedding_generator.get_embeddings()["embeddings"])
             detectors[embedding_generator.name].append(detector)
             setup_report[embedding_generator.name][instantiated_drift_detector.name] = {
@@ -108,15 +110,15 @@ def gradual_drift_test(drift_generators, embedding_generators, detectors, models
             for embedding_generator in embedding_generators:
                 drift_detection_results[str(drift_proportion)][
                     drift_generator.name][embedding_generator.name] = {}
-                print(f"Generating embeddings with {embedding_generator.name} for {drift_proportion} drift")
-                print(f"Data shape: {data.shape}")
+                logging.warning(f"Generating embeddings with {embedding_generator.name} for {drift_proportion} drift")
+                logging.warning(f"Data shape: {data.shape}")
                 embedding_resources = embedding_generator.generate_embeddings(data)
-                print(f"Embeddings shape: {embedding_generator.get_embeddings()['embeddings'].shape}")
+                logging.warning(f"Embeddings shape: {embedding_generator.get_embeddings()['embeddings'].shape}")
                 drift_detection_report[str(drift_proportion)][
                     drift_generator.name][embedding_generator.name] = {
                         "embedding_resources": embedding_resources}
                 for drift_detector in detectors[embedding_generator.name]:
-                    print(f"Predicting with {drift_detector.name} on {embedding_generator.name} with {drift_generator.name} drift")
+                    logging.warning(f"Predicting with {drift_detector.name} on {embedding_generator.name} with {drift_generator.name} drift")
 
                     result, resources = drift_detector.predict(embedding_generator.get_embeddings()["embeddings"])
                     drift_detection_results[str(drift_proportion)][
@@ -136,7 +138,7 @@ def gradual_drift_test(drift_generators, embedding_generators, detectors, models
 def pipeline(output_bucket):
     data = download_and_load_data()
     # Get 0.1% of the data for testing
-    data = data.sample(frac=0.001)
+    # data = data.sample(frac=0.001)
     drift_generators = [
         TemporalDriftGenerator(desired_drift_proportion=0.33),
         SelectionDriftGenerator(column_name="text", criteria=len, desired_drift_proportion=0.33),
@@ -152,14 +154,14 @@ def pipeline(output_bucket):
     drift_detection_report, drift_detection_results = gradual_drift_test(
         drift_generators, embedding_generators, detectors, models)
     
-    print("Drift generation report:")
-    print(drift_generation_report)
-    print("Setup report:")
-    print(setup_report)
-    print("Drift detection report:")
-    print(drift_detection_report)
-    print("Drift detection results:")
-    print(drift_detection_results)
+    logging.warning("Drift generation report:")
+    logging.warning(drift_generation_report)
+    logging.warning("Setup report:")
+    logging.warning(setup_report)
+    logging.warning("Drift detection report:")
+    logging.warning(drift_detection_report)
+    logging.warning("Drift detection results:")
+    logging.warning(drift_detection_results)
 
     folder = f"experiments/{str(int(time.time()))}"
 
@@ -174,13 +176,13 @@ def pipeline(output_bucket):
     with open(f"{folder}/drift_detection_results.json", "w") as f:
         json.dump(drift_detection_results, f, cls=MyEncoder)
 
-    #upload_to_gcs(f"experiments/{folder}", output_bucket, f"experiments/{folder}")
+    upload_to_gcs(f"experiments/{folder}", output_bucket, f"experiments/{folder}")
 
     
 def parse_args():
     import argparse
     parser = argparse.ArgumentParser(description='Run the drift detection pipeline')
-    parser.add_argument('--output-bucket', type=str, default="experiments", help='Folder to save the results')
+    parser.add_argument('--output-bucket', type=str, default="experiments-tda", help='Folder to save the results')
     args = parser.parse_args()
     return args
 

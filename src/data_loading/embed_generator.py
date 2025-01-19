@@ -114,6 +114,7 @@ class W2VEmbeddingsGenerator(EmbedGenerator):
     def __init__(self, name="W2VEmbeddingsGenerator"):
         super().__init__(name=name)
         nltk.download('punkt')
+        nltk.download('punkt_tab')
         nltk.download('stopwords')
         nltk.download('wordnet')
 
@@ -131,3 +132,4 @@ class W2VEmbeddingsGenerator(EmbedGenerator):
             axis=0) for sentence in tokens])
         
         return embeddings
+    

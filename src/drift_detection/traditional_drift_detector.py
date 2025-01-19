@@ -2,6 +2,7 @@ import os
 import json
 import numpy as np
 from alibi_detect.cd import KSDrift, MMDDrift, LSDDDrift
+import logging
 
 from .drift_detector import DriftDetector
 
@@ -19,7 +20,7 @@ class KSDriftDetector(DriftDetector):
     
     def _predict(self, data_with_drift, data_name="drifted data"):
         ks_result = self.ks.predict(data_with_drift)
-        print(f"Kolmogorov-Smirnov test {self.name} result for {data_name}: {ks_result}")
+        logging.warning(f"Kolmogorov-Smirnov test {self.name} result for {data_name}: {ks_result}")
         return ks_result
     
     def save(self, path):
@@ -58,7 +59,7 @@ class MMDDriftDetector(DriftDetector):
     
     def _predict(self, data_with_drift, data_name="drifted data"):
         mmdd_result = self.mmdd.predict(data_with_drift)
-        print(f"Maximum Mean Discrepancy test {self.name} result for {data_name}: {mmdd_result}")
+        logging.warning(f"Maximum Mean Discrepancy test {self.name} result for {data_name}: {mmdd_result}")
         return mmdd_result
     
     def save(self, path):
@@ -96,7 +97,7 @@ class LSDDriftDetector(DriftDetector):
     
     def _predict(self, data_with_drift, data_name="drifted data"):
         lsdd_result = self.lsdd.predict(data_with_drift)
-        print(f"Least Squares Drift test {self.name} result for {data_name}: {lsdd_result}")
+        logging.warning(f"Least Squares Drift test {self.name} result for {data_name}: {lsdd_result}")
         return lsdd_result
     
     def save(self, path):
@@ -131,7 +132,7 @@ class TraditionalDriftDetector(DriftDetector):
         self.lsdd = LSDDriftDetector(alfa_threshold=alfa_threshold)
 
     def fit(self, data_without_drift):
-        print(f"Fitting with data without drift of shape {data_without_drift.shape}")
+        logging.warning(f"Fitting with data without drift of shape {data_without_drift.shape}")
         result, resource_usage = self._fit(data_without_drift)
         return result, resource_usage
 
@@ -143,8 +144,8 @@ class TraditionalDriftDetector(DriftDetector):
         return self, {"ks": ks_resource_usage, "mmdd": mmdd_resource_usage, "lsdd": lsdd_resource_usage}
     
     def predict(self, data_with_drift, data_name="drifted data"):
-        print(f"Predicting with data with drift of shape {data_with_drift.shape}")
-        print(f"No drift data shape: {self.data_without_drift.shape}")
+        logging.warning(f"Predicting with data with drift of shape {data_with_drift.shape}")
+        logging.warning(f"No drift data shape: {self.data_without_drift.shape}")
         result, resource_usage = self._predict(data_with_drift, data_name)
         return result, resource_usage
     
