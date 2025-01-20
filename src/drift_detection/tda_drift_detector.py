@@ -8,7 +8,7 @@ from .drift_detector import DriftDetector
 import logging
 
 R_COVER_TRESHOLD = 0.3
-MEMORY_USAGE_RATIO = 0.4
+MEMORY_USAGE_RATIO = 0.2
 
 
 
@@ -50,6 +50,7 @@ class TDADriftDetector(DriftDetector):
     
     @staticmethod
     def _compute_nperm_based_on_available_memory():
+        logging.warning(f"Memory usage ratio: {MEMORY_USAGE_RATIO}")
         available_memory = psutil.virtual_memory().available
         usable_memory = available_memory * MEMORY_USAGE_RATIO
         float_size = 4
