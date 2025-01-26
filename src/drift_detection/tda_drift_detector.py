@@ -8,7 +8,7 @@ from .drift_detector import DriftDetector
 import logging
 
 R_COVER_TRESHOLD = 0.3
-MEMORY_USAGE_RATIO = 0.2
+MEMORY_USAGE_RATIO = 0.6
 
 
 

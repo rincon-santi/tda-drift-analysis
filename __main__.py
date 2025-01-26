@@ -137,8 +137,8 @@ def gradual_drift_test(drift_generators, embedding_generators, detectors, models
 
 def pipeline(output_bucket):
     data = download_and_load_data()
-    # Get 0.1% of the data for testing
-    # data = data.sample(frac=0.001)
+    # Get 5% of the data to avoid memory issues
+    data = data.sample(frac=0.05)
     drift_generators = [
         TemporalDriftGenerator(desired_drift_proportion=0.33),
         SelectionDriftGenerator(column_name="text", criteria=len, desired_drift_proportion=0.33),
